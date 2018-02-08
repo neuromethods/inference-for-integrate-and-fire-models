@@ -1,6 +1,6 @@
 # inference-for-integrate-and-fire-models
 
-Implementations of the inference methods for neuronal integrate-and-fire circuit models described in: __Ladenbauer and Ostojic,__ ___Inferring mechanistic models of neuronal microcircuits from single-trial spike trains___ (submitted for peer review 2018)
+Implementations of the inference methods for neuronal integrate-and-fire circuit models described in: __Ladenbauer and Ostojic,__ ___Inferring mechanistic models of neuronal microcircuits from single-trial spike trains___ (submitted 2018, [bioRxiv preprint](https://www.biorxiv.org/content/early/2018/02/07/261016))
 
 The code contains examples for the estimation of 
 
