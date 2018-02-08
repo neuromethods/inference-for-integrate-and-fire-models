@@ -350,8 +350,10 @@ def EIF_pertISIdensityhat_numba(V_vec, kr, taum, Vr, VT, DeltaT, Tref,
     for it in mrange:
         p0_tpert = (w_vec[1]-w_vec[0]) * (phat_w0 + sumsum[it,:] + \
                    np.conj(sumsum[it,:])) / (2*np.pi)
-        # the following 5 lines increase the robustness of the method (improving
-        # the results for a range of otherwise "problematic" parametrizations) 
+        # the following 5 lines implement a correction of the membrane voltage 
+        # density at the perturbation time, which may be necessary because of
+        # improper parameter values for the numerical scheme (allowing for 
+        # increased efficiency and robustness of the method)
         dummy = p0_tpert.real
         k = n-1
         while dummy[k]>=0 and k>0:
