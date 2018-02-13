@@ -592,9 +592,121 @@ def spiketrain_likel_adapt(p, *args):
  
 
 
-def Jij_estim_wrapper(args):  # this is called for each postsynaptic neuron 
+def Jij_estim_wrapper_v1(args):  # this is called for each postsynaptic neuron 
+    # v1 uses the finite volume method to calculate the 1st order correction 
+    # pISI1 due to input perturbations
     i_N, N, args_fixed = args
-    Spt_dict, delay, sigma_init, N_tpert, J_bnds_def, Jmat, params = args_fixed
+    Spt_dict, delay, sigma_init, N_tpert, J_bnds, Jmat, params = args_fixed
+    
+    J_estim_row = np.zeros(N)
+    logl_coupled_row = np.zeros(N) * np.nan
+        
+    # 1) estimation of baseline input parameters (mu, sigma) for the (postsyn.)  
+    #    neuron (without using the spike times of other neurons)
+    start = time.time()
+    ISIs = np.diff(Spt_dict[i_N])
+    ISImax = 1.1*np.max(ISIs)
+    ISImean = np.mean(ISIs)  
+    print('mean ISI of neuron {n_no} = {ISImean}'.format(n_no=i_N+1, 
+          ISImean=np.round(ISImean,2)))
+
+    mu_init = find_mu_init(ISImean, args=(params,sigma_init))
+    init_vals = np.array([mu_init, sigma_init])
+    sol = scipy.optimize.minimize(spiketrain_likel_musig, init_vals, 
+                                  args=(params, ISIs, ISImean, ISImax), 
+                                  method='nelder-mead', 
+                                  options={'xatol':0.025, 'fatol':0.01})
+    mu_estim, sigma_estim = sol.x  
+    print('neuron {n_no}: mu_estim = {mu}, sigma_estim = {sig}'.format(
+           n_no=i_N+1, mu=np.round(mu_estim,2), sig=np.round(sigma_estim,2)))
+    
+    args = (params, ISIs, ISImean, ISImax, mu_estim, sigma_estim)
+    lval, logl_uncoupled, pISI_times, pISI0_vals = calc_spiketrain_likelihood(args)
+    
+    dt = pISI_times[1]-pISI_times[0]
+    ISI0mean = dt*np.sum(pISI0_vals*pISI_times)
+           
+    # 2) calculate ISI density corrections (pISI1) for generic perturbation 
+    # times (t_pert): N_tpert time values in [0, t_pert_max], where 
+    # t_pert_max > ISI0mean and pISI0[t_pert_max] == epsilon (e.g. 1e-3)  
+    # then (further below) use lookups: t_pert that is closest to the observed 
+    # arrival time
+    epsilon = 1e-4  #1e-4 to 1e-3
+    dummy = pISI0_vals.copy()
+    dummy[pISI_times<ISI0mean] = 0
+    idx = np.argmin(np.abs(dummy - epsilon))
+    t_pert_max = pISI_times[idx]
+    
+    t_pert_vals = np.linspace(0.0, t_pert_max, num=N_tpert)
+    d_tp = t_pert_vals[1]-t_pert_vals[0]
+    
+    params['t_grid'] = np.arange(0, ISImax, params['fvm_dt'])
+    pISI0, pISI1 = pISI0pISI1_deltaperts_fvm_sg(mu_estim, t_pert_vals, 
+                                                sigma_estim, params)
+
+    # the transient peak in pISI1 following t_pert is correct but causes problems 
+    # for the estimation of inhibitory connections (that are not very weak) unless
+    # we use vanishingly small time steps for the finite volume method; 
+    # the following "truncation" over a short period alleviates this difficulty 
+    t_dur = 0.1  # ms
+#    plt.figure()
+    for itp, tp in enumerate(t_pert_vals):
+        idcs = (params['t_grid']>tp-params['fvm_dt']) & (params['t_grid']<=tp+t_dur)
+        idx = (params['t_grid']>tp+t_dur) & \
+              (params['t_grid']<=tp+t_dur+params['fvm_dt'])
+        pISI1[itp,idcs] = pISI1[itp,idx]
+#        plt.plot(params['t_grid'], pISI1[itp,:], 'k')
+#        plt.plot([t_pert_vals[itp]], [0], 'ks', markersize=2)
+    
+    print('precalculations for neuron {n_no} took {dur}s'.format(n_no=i_N+1, 
+          dur=np.round(time.time() - start,2)))
+
+    # next, for each ISI of the (postsyn.) neuron iN, determine the appropriate 
+    # perturbation times for each presyn. neuron j_N and then determine the 
+    # coupling strength J_ij that optimizes the (partial) likelihood for neuron
+    # iN, using (looking-up) the appropriate pISI1 corrections
+    ISImin = np.percentile(ISIs, 2.5)  # for increased robustness omit smallest 
+    ISImax = np.percentile(ISIs, 97.5) # and largest ISIs for estimation
+    ISIrange = range(len(ISIs))
+    for j_N in range(N):
+        if j_N!=i_N and len(Spt_dict[j_N])>0:  # otherwise J_ij = 0, (no autapses, 
+                                               # but this can be changed)
+            # generate list of i_tp indices (can be >1 per ISI) 
+            # which indicate which (discrete) t_pert row(s) in pISI1 to use per ISI            
+            tp_idx_list = [[] for l in ISIrange]
+            for ind, tspj in enumerate(Spt_dict[j_N]):
+                tspj += delay  # mapping from presyn. spike time to postsyn. 
+                               # perturbation time in pISI_times
+                if tspj>Spt_dict[i_N][0] and tspj<Spt_dict[i_N][-1]:
+                # find the closest previous spike time of neuron i_N which 
+                # determines the ISI under consideration, evaluate the 
+                # duration and save the corresponding i_tp index
+                    idx_prev_tspi = np.argmin( np.abs(
+                                    Spt_dict[i_N][Spt_dict[i_N]<tspj]-tspj) )
+                    t_pert_local = tspj-Spt_dict[i_N][idx_prev_tspi]
+                    if t_pert_local<t_pert_max+d_tp:
+                        tp_idx_list[idx_prev_tspi] += \
+                                   [np.argmin(np.abs(t_pert_vals-t_pert_local))]
+                    
+            # call loglikelihood maximizer w.r.t. J_ij:          
+            args = (ISIs, ISImin, ISImax, tp_idx_list, 
+                    params['t_grid'], pISI0, pISI1)
+
+            sol = scipy.optimize.minimize(spiketrain_likel_Jij, 0.25, args=args, 
+                     method='nelder-mead', options={'xatol':0.005, 'fatol':1e-5})
+            Jij_estim = sol.x[0]
+                                    
+            J_estim_row[j_N] = Jij_estim  
+            logl_coupled_row[j_N] = -sol.fun
+            
+    return i_N, mu_estim, sigma_estim, logl_uncoupled, J_estim_row, logl_coupled_row
+
+
+def Jij_estim_wrapper_v2(args):  # this is called for each postsynaptic neuron 
+    # v2 uses the Fourier method to calculate the 1st order correction pISI1
+    # due to input perturbations
+    i_N, N, args_fixed = args
+    Spt_dict, delay, sigma_init, N_tpert, J_bnds, Jmat, params = args_fixed
     
     J_estim_row = np.zeros(N)
     logl_coupled_row = np.zeros(N) * np.nan
@@ -710,17 +822,20 @@ def Jij_estim_wrapper(args):  # this is called for each postsynaptic neuron
             # call loglikelihood maximizer w.r.t. J_ij:          
             args = (ISIs, ISImin, ISImax, tp_idx_list, 
                     pISI_times, pISI0_vals, pISI1_vals)
-            bnds = J_bnds_def
-            # brute force is fast enough (this is not the bottleneck here)
-            J_vals = np.arange(bnds[0], bnds[1]+0.01, 0.025)
-            abs_logl = np.zeros_like(J_vals)
-            for iJ, Jval in enumerate(J_vals):
-                val = spiketrain_likel_Jij(Jval, *args)
-                abs_logl[iJ] = val
-            idx = np.nanargmin(abs_logl)
+            sol = scipy.optimize.minimize(spiketrain_likel_Jij, 0.25, args=args, 
+                     method='nelder-mead', options={'xatol':0.005, 'fatol':1e-5})
+            Jij_estim = sol.x[0]
             
-            J_estim_row[j_N] = J_vals[idx]  
-            logl_coupled_row[j_N] = -abs_logl[idx]
+            # brute force alternative:
+#            J_vals = np.arange(J_bnds[0], J_bnds[1]+0.01, 0.025)
+#            abs_logl = np.zeros_like(J_vals)
+#            for iJ, Jval in enumerate(J_vals):
+#                val = spiketrain_likel_Jij(Jval, *args)
+#                abs_logl[iJ] = val
+#            idx = np.nanargmin(abs_logl)
+            
+            J_estim_row[j_N] = Jij_estim  #J_vals[idx]  
+            logl_coupled_row[j_N] = -sol.fun  #-abs_logl[idx]
             
     return i_N, mu_estim, sigma_estim, logl_uncoupled, J_estim_row, logl_coupled_row
 
@@ -748,15 +863,14 @@ def spiketrain_likel_Jij(J_ij, *args):
                 valid = False
                 #print 'neg. pISI value encoutered for J_ij =', J_ij
                 #print '==> log-likelihood = nan' 
-                loglval = np.nan                        
+                loglval = 1e20 #np.nan                        
                 # pISI_vals should not contain neg. values
                 # note that omitting only affected ISIs impairs the comparability 
                 # between overall loglikel. values
         k += 1
     error = np.abs(loglval)
     return error
-
-
+ 
 
 @njit
 def sim_LNexp_sigfix_mupert(tgrid, mu, J, tau, d, tperts, mu_vals, 
@@ -1482,16 +1596,15 @@ class Grid(object):  # this class implements the voltage discretization
 @njit
 def get_v_numba(L, Vi, DT, VT, taum, mu, EIF = True):
     # drift coeffs for EIF/LIF model
-    # EIF model
-    drift = np.empty(L)
-    if EIF:
-        for i in xrange(L):
-            drift[i] = ( - Vi[i] + DT * exp((Vi[i] - VT) / DT) ) / taum + mu
     # LIF model
-    else:
+    drift = np.empty(L)
+    if not EIF:
         for i in xrange(L):
             drift[i] = mu - Vi[i] / taum
-    drift[np.where(drift == 0.)] = 10e-15
+    # EIF model
+    else:
+        for i in xrange(L):
+            drift[i] = ( - Vi[i] + DT * exp((Vi[i] - VT) / DT) ) / taum + mu
     return drift
 
 
@@ -1505,24 +1618,40 @@ def matAdt_opt(mat,N,v,D,dV,dt):
     dt_dV = dt/dV
 
     for i in xrange(1,N-1):
-        # diagonal
-        mat[1,i] = -dt_dV*(v[i]*exp_vdV_D(v[i],dV,D)/(1.-exp_vdV_D(v[i],dV,D))
-                           +v[i+1]/(1.-exp_vdV_D(v[i+1],dV,D)))
-        # lower diagonal
-        mat[2,i-1] = dt_dV*v[i]/(1.-exp_vdV_D(v[i],dV,D))
-        # upper diagonal
-        mat[0,i+1] = dt_dV*v[i+1]*exp_vdV_D(v[i+1],dV,D)/(1.-exp_vdV_D(v[i+1],dV,D))
-
+        if v[i] != 0.0:
+            exp_vdV_D1 = exp_vdV_D(v[i],dV,D)
+            mat[1,i] = -dt_dV*v[i]*exp_vdV_D1/(1.-exp_vdV_D1) # diagonal
+            mat[2,i-1] = dt_dV*v[i]/(1.-exp_vdV_D1) # lower diagonal
+        else:
+            mat[1,i] = -dt_dV*D/dV # diagonal
+            mat[2,i-1] = dt_dV*D/dV # lower diagonal
+        if v[i+1] != 0.0:
+            exp_vdV_D2 = exp_vdV_D(v[i+1],dV,D)
+            mat[1,i] -= dt_dV*v[i+1]/(1.-exp_vdV_D2) # diagonal  
+            mat[0,i+1] = dt_dV*v[i+1]*exp_vdV_D2/(1.-exp_vdV_D2) # upper diagonal
+        else:
+            mat[1,i] -= dt_dV*D/dV # diagonal
+            mat[0,i+1] = dt_dV*D/dV # upper diagonal
+            
     # boundary conditions
-    # first diagonal
-    mat[1,0] = -dt_dV*(v[1]/(1.-exp_vdV_D(v[1],dV,D))) 
-    # first upper
-    mat[0,1] = dt_dV * v[1]*exp_vdV_D(v[1],dV,D)/(1.-exp_vdV_D(v[1],dV,D)) 
-    # last lower
-    mat[2,-2] = dt_dV*v[-2]/(1.-exp_vdV_D(v[-2],dV,D)) 
-    # last diagonal
-    mat[1,-1] = -dt_dV*(v[-2]*exp_vdV_D(v[-2],dV,D)/(1.-exp_vdV_D(v[-2],dV,D))
-                     +v[-1]*(1.+exp_vdV_D(v[-1],dV,D))/(1.-exp_vdV_D(v[-1],dV,D)))
+    if v[1] != 0.0:
+        tmp1 = v[1]/(1.-exp_vdV_D(v[1],dV,D))
+    else:
+        tmp1 = D/dV
+    if v[-1] != 0.0:
+        tmp2 = v[-1]/(1.-exp_vdV_D(v[-1],dV,D))
+    else:
+        tmp2 = D/dV
+    if v[-2] != 0.0:
+        tmp3 = v[-2]/(1.-exp_vdV_D(v[-2],dV,D))
+    else:
+        tmp3 = D/dV
+    
+    mat[1,0] = -dt_dV*tmp1  # first diagonal
+    mat[0,1] = dt_dV*tmp1*exp_vdV_D(v[1],dV,D)  # first upper  
+    mat[2,-2] = dt_dV*tmp3  # last lower
+    mat[1,-1] = -dt_dV * ( tmp3*exp_vdV_D(v[-2],dV,D) 
+                          +tmp2*(1.+exp_vdV_D(v[-1],dV,D)) )  # last diagonal
 
 
 # initial probability density
@@ -1552,7 +1681,10 @@ def initial_p_distribution(grid,params):
 @njit
 def get_r_numba(v_end, dV, D, p_end):
     # calculation of rate/pISI
-    r = v_end*((1.+exp((-v_end*dV)/D))/(1.-exp((-v_end*dV)/D)))*p_end
+    if v_end != 0.0:
+        r = v_end*((1.+exp((-v_end*dV)/D))/(1.-exp((-v_end*dV)/D)))*p_end
+    else:
+        r = 2*D/dV * p_end
     return r
 
 
@@ -1630,3 +1762,228 @@ def pISI_fvm_sg(mu, sigma, params, fpt=True, rt=list()):
 
     results = {'r':r}
     return results
+
+
+
+
+
+def pISI0pISI1_deltaperts_fvm_sg(mu0, tpert_vec, sigma, params):
+    # solves the Fokker Planck equation (first passage time problem)
+    # for the the unperturbed system and the correction pISI1 for a small 
+    # perturbation of mean input at time tpert, delta(t-tpert), using the 
+    # Scharfetter-Gummel finite volume method
+    epsilon = 1e-4
+    dt = params['fvm_dt']
+    T_ref = params['T_ref']
+    DT = params['Delta_T']
+    VT = params['V_T']
+    taum = params['tau_m']
+
+    EIF_model = True if params['neuron_model'] == 'EIF' else False
+
+    # instance of the spatial grid class
+    grid = Grid(V_0=params['V_lb'], V_1=params['V_s'], V_r=params['V_r'],
+                N_V=params['N_centers_fvm'])
+
+    pISI0 = np.zeros_like(params['t_grid'])
+    pISI1_exc = np.zeros((len(tpert_vec), len(pISI0)))
+    #pISI1_inh = np.zeros((len(tpert_vec), len(pISI0)))
+    compute_pISI1 = True
+    nt = len(pISI0)
+    dV = grid.dV
+    Adt = np.zeros((3,grid.N_V))
+    ones_mat = np.ones(grid.N_V)
+
+    # drift coefficients
+    v = get_v_numba(grid.N_V+1, grid.V_interfaces, DT, VT,
+                    taum, mu0, EIF = EIF_model)  
+    # diffusion coefficient
+    D = (sigma ** 2) * 0.5  
+    # create banded matrix A 
+    matAdt_opt(Adt,grid.N_V,v,D,dV,dt)  # changes the first argument
+    Adt *= -1.
+    Adt[1,:] += ones_mat
+          
+    p0 = initial_p_distribution(grid, params)
+    pertcnt = 0
+    for n in xrange(nt):          
+        if n*dt < T_ref+dt:
+            pISI0[n] = 0
+        else:
+            rhs = p0.copy()          
+            # solve the linear system
+            p0 = solve_banded((1, 1), Adt, rhs)
+            # compute pISI0
+            pISI0[n] = get_r_numba(v[-1], dV, D, p0[-1])
+            
+        idx = (n*dt<=tpert_vec) & (tpert_vec<(n+1)*dt)
+        if any(idx) and compute_pISI1:
+            prop_not_spiked = dV*np.sum(p0)
+            # proportion of trials in which the neuron has not yet spiked 
+            if prop_not_spiked > epsilon:
+                # exc. perturbation: rightward shift in p
+                p = p0.copy()
+                p[1:] = p[:-1]  
+                p[0] = 0              
+                pISI = pISI0.copy()
+                pISI[n] = get_r_numba(v[-1], dV, D, p[-1])
+                # continue from tpert
+                for k in range(n+1,nt):
+                    rhs = p.copy()          
+                    # solve the linear system
+                    p = solve_banded((1, 1), Adt, rhs)
+                    # compute pISI
+                    pISI[k] = get_r_numba(v[-1], dV, D, p[-1])     
+                pISI1_exc[pertcnt,:] = pISI.copy()               
+                pertcnt += 1
+            else:
+                compute_pISI1 = False  # assuming tpert_vec is ordered
+                
+    for ip in range(pertcnt):
+        pISI1_exc[ip,:] = (pISI1_exc[ip,:]-pISI0)/dV
+         
+    return pISI0, pISI1_exc #, pISI1_inh
+
+
+#def pISI0pISI_deltaperts_x4_fvm_sg(mu0, tpert_vec, Ji_min, Je_max, sigma, params):
+#    # solves the Fokker Planck equation (first passage time problem)
+#    # for the the unperturbed system and the correction pISI1 for a small 
+#    # perturbation of mean input at time tpert, delta(t-tpert), using the 
+#    # Scharfetter-Gummel finite volume method
+#    epsilon = 1e-4
+#    dt = params['fvm_dt']
+#    T_ref = params['T_ref']
+#    DT = params['Delta_T']
+#    VT = params['V_T']
+#    taum = params['tau_m']
+#
+#    EIF_model = True if params['neuron_model'] == 'EIF' else False
+#
+#    # instance of the spatial grid class
+#    grid = Grid(V_0=params['V_lb'], V_1=params['V_s'], V_r=params['V_r'],
+#                N_V=params['N_centers_fvm'])
+#
+#    pISI0 = np.zeros_like(params['t_grid'])
+#    pISI_Jemin = np.zeros((len(tpert_vec), len(pISI0)))
+#    pISI_Jemax = np.zeros((len(tpert_vec), len(pISI0)))
+#    pISI_Jimax = np.zeros((len(tpert_vec), len(pISI0)))
+#    pISI_Jimin = np.zeros((len(tpert_vec), len(pISI0)))
+#    compute_pISI1 = True
+#    nt = len(pISI0)
+#    dV = grid.dV
+#    Adt = np.zeros((3,grid.N_V))
+#    ones_mat = np.ones(grid.N_V)
+#
+#    ke = int(round(Je_max/dV))
+#    ki = int(round(-Ji_min/dV))
+#    # drift coefficients
+#    v = get_v_numba(grid.N_V+1, grid.V_interfaces, DT, VT,
+#                    taum, mu0, EIF = EIF_model)  
+#    # diffusion coefficient
+#    D = (sigma ** 2) * 0.5  
+#    # create banded matrix A 
+#    matAdt_opt(Adt,grid.N_V,v,D,dV,dt)  # changes the first argument
+#    Adt *= -1.
+#    Adt[1,:] += ones_mat
+#          
+#    p0 = initial_p_distribution(grid, params)
+#    pertcnt = 0
+#    for n in xrange(nt):          
+#        if n*dt < T_ref+dt:
+#            pISI0[n] = 0
+#        else:
+#            rhs = p0.copy()          
+#            # solve the linear system
+#            p0 = solve_banded((1, 1), Adt, rhs)
+#            # compute pISI0
+#            pISI0[n] = get_r_numba(v[-1], dV, D, p0[-1])
+#            
+#        idx = (n*dt<=tpert_vec) & (tpert_vec<(n+1)*dt)
+#        if any(idx) and compute_pISI1:
+#            prop_not_spiked = dV*np.sum(p0)
+#            # proportion of trials in which the neuron has not yet spiked 
+#            if prop_not_spiked > epsilon:
+#            # exc./inh. perturbations: rightward/leftward shifts in p
+#            
+#                # for Je_min
+#                p = p0.copy()
+#                p[1:] = p[:-1]  
+#                p[0] = 0              
+#                pISI = pISI0.copy()
+#                pISI[n] = get_r_numba(v[-1], dV, D, p[-1])
+#                # continue from tpert
+#                for k in range(n+1,nt):
+#                    rhs = p.copy()          
+#                    # solve the linear system
+#                    p = solve_banded((1, 1), Adt, rhs)
+#                    # compute pISI
+#                    pISI[k] = get_r_numba(v[-1], dV, D, p[-1])     
+#                pISI_Jemin[pertcnt,:] = pISI.copy()
+#                
+#                # for Je_max
+#                p = p0.copy()
+#                p[ke:] = p[:-ke]
+#                p[:ke-1] = 0                
+#                pISI = pISI0.copy()
+#                pISI[n] = get_r_numba(v[-1], dV, D, p[-1])
+#                # continue from tpert
+#                for k in range(n+1,nt):
+#                    rhs = p.copy()          
+#                    # solve the linear system
+#                    p = solve_banded((1, 1), Adt, rhs)
+#                    # compute pISI
+#                    pISI[k] = get_r_numba(v[-1], dV, D, p[-1])
+#                pISI_Jemax[pertcnt,:] = pISI.copy()
+#                
+#                # for Ji_max
+#                p = p0.copy()
+#                p[:-1] = p[1:]
+#                p[-1] = 0                
+#                pISI = pISI0.copy()
+#                pISI[n] = get_r_numba(v[-1], dV, D, p[-1])
+#                # continue from tpert
+#                for k in range(n+1,nt):
+#                    rhs = p.copy()          
+#                    # solve the linear system
+#                    p = solve_banded((1, 1), Adt, rhs)
+#                    # compute pISI
+#                    pISI[k] = get_r_numba(v[-1], dV, D, p[-1])
+#                pISI_Jimax[pertcnt,:] = pISI.copy()
+#                
+#                # for Ji_min
+#                p = p0.copy()   
+#                p[:-ki] = p[ki:]
+#                p[-ki:] = 0
+#                pISI = pISI0.copy()
+#                pISI[n] = get_r_numba(v[-1], dV, D, p[-1])
+#                # continue from tpert
+#                for k in range(n+1,nt):
+#                    rhs = p.copy()          
+#                    # solve the linear system
+#                    p = solve_banded((1, 1), Adt, rhs)
+#                    # compute pISI
+#                    pISI[k] = get_r_numba(v[-1], dV, D, p[-1])
+#                pISI_Jimin[pertcnt,:] = pISI.copy()
+#                
+#                pertcnt += 1
+#            else:
+#                compute_pISI1 = False  # assuming tpert_vec is ordered
+#                
+#    if pertcnt < len(tpert_vec):
+#        for k in range(pertcnt, len(tpert_vec)):
+#            pISI_Jemin[k,:] = pISI0.copy()
+#            pISI_Jemax[k,:] = pISI0.copy()
+#            pISI_Jimax[k,:] = pISI0.copy()
+#            pISI_Jimin[k,:] = pISI0.copy()
+#         
+#    res_dict = {}
+#    res_dict['pISI0'] = pISI0
+#    res_dict['pISI_Jemin'] = pISI_Jemin
+#    res_dict['pISI_Jemax'] = pISI_Jemax
+#    res_dict['pISI_Jimax'] = pISI_Jimax
+#    res_dict['pISI_Jimin'] = pISI_Jimin
+#    res_dict['Je_min'] = dV
+#    res_dict['Je_max'] = ke*dV
+#    res_dict['Ji_max'] = -dV
+#    res_dict['Ji_min'] = -ki*dV
+#    return res_dict

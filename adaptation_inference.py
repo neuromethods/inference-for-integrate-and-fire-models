@@ -5,7 +5,7 @@ exponential I&F neuron (LIF/EIF) subject to fluctuating inputs, using method 1b,
 cf. Ladenbauer & Ostojic 2018 (Results section 5, Fig 4B)
 -- written by Josef Ladenbauer in 2018 
 
-run time was <10 min. on an Intel i7-2600 quad-core PC using Python 2.7 
+run time was <7.5 min. on an Intel i7-2600 quad-core PC using Python 2.7 
 (Anaconda distribution v. 5.0.1) 
 '''
 

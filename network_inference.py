@@ -5,8 +5,9 @@ network of leaky or exponential I&F neurons using method 1a,
 cf. Ladenbauer & Ostojic 2018 (Results section 4, Fig 3A)
 -- written by Josef Ladenbauer in 2018 
 
-run time was 11 min. on an Intel i7-2600 quad-core PC using Python 2.7 
-(Anaconda distribution v. 5.0.1) 
+run time was <2.5 min. when using the finite volume method (use_fvm=True) and 
+             <8 min. when using the Fourier method only (use_fvm=False) 
+on an Intel i7-2600 quad-core PC using Python 2.7 (Anaconda distribution v. 5.0.1) 
 '''
 
 import inference_methods as im
@@ -61,11 +62,23 @@ params['V_vals'] = np.arange(params['V_lb'],params['V_s']+d_V/2,d_V)
 params['freq_vals'] = np.arange(0.0, f_max+d_freq/2, d_freq)/1000  # kHz
 params['V_r_idx'] = np.argmin(np.abs(params['V_vals']-params['V_r'])) 
                     # index of reset voltage on grid, this should be a grid point
+               
+# additional parameters when using the finite volume method instead of the 
+# Fourier method to calculate p_ISI^1, which is optional (but faster)
+use_fvm = True  # False: using Fourier method
+params['neuron_model'] = 'LIF'
+params['integration_method'] = 'implicit'
+params['N_centers_fvm'] = 1000  # number of centers for voltage discretization
+params['fvm_v_init'] = 'delta'  # voltage density initialization
+params['fvm_delta_peak'] = params['V_r']  # location of initial density peak
+params['fvm_dt'] = 0.1  # ms, time step for finite volume method
+                        # 0.1 seems ok, prev. def.: 0.05 ms 
+
 sigma_init = 3.0  # initial sigma value (initial mu value will be determined by 
                   # sigma_init and empirical mean ISI)
 N_tpert = 300  # determines spacing of (potential) perturbation times within ISIs
-               # due to coupling
-J_bnds_def = (-3.0, 3.0)  # mV, min./max. coupling strength 
+               # due to coupling; def.: 300            
+J_bnds = (-3.0, 3.0)  # mV, min./max. coupling strength 
 N_procs = int(5.0*multiprocessing.cpu_count()/6)  # number of parallel processes                
              
                 
@@ -103,7 +116,7 @@ if __name__ == '__main__':
     # ESTIMATE PARAMETERS from spike trains -----------------------------------
     start = time.time()
     N = len(Spt_dict.keys())
-    args_fixed = (Spt_dict, d, sigma_init, N_tpert, J_bnds_def, Jmat, params)      
+    args_fixed = (Spt_dict, d, sigma_init, N_tpert, J_bnds, Jmat, params)      
     arg_tuple_list = [(iN, N, args_fixed) for iN in range(N)]    
                                                               
     print('starting estimation using {} parallel processes'.format(N_procs))
@@ -111,7 +124,11 @@ if __name__ == '__main__':
     print('')
     print('likelihood optimization can take several minutes...')
     pool = multiprocessing.Pool(N_procs)
-    result = pool.imap_unordered(im.Jij_estim_wrapper, arg_tuple_list)
+    if use_fvm:
+        result = pool.imap_unordered(im.Jij_estim_wrapper_v1, arg_tuple_list)
+    else:
+        result = pool.imap_unordered(im.Jij_estim_wrapper_v2, arg_tuple_list)
+#    result = map(im.Jij_estim_wrapper_v1, arg_tuple_list)  # single processing
     # Jij_estim_wrapper estimates all synaptic strengths for a given 
     # post-synaptic neuron (with number iN)
 
@@ -136,8 +153,10 @@ if __name__ == '__main__':
         D['logl_coupled'][i_N,:] = logl_coupled_row
 
     pool.close()
+    Pcc = np.corrcoef(np.ravel(D['J_estim']),np.ravel(D['J_true']))
     print('')
-    print('estimation took {dur}s'.format(dur=np.round(time.time() - start,2)))
+    print('estimation took {dur}s, corr.-coeff. = {cc}'.format(
+           dur=np.round(time.time() - start,2), cc=Pcc[0,1]) )
     print('')
              
     
