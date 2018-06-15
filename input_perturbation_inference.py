@@ -2,7 +2,7 @@
 '''
 example script for estimation of input perturbations of a leaky or exponential 
 I&F neuron (LIF/EIF) subject to fluctuating inputs using method 2, 
-cf. Ladenbauer & Ostojic 2018 (Results section 3, Fig 2A)
+cf. Ladenbauer et al. 2018 (Results section 3, Fig 3A)
 -- written by Josef Ladenbauer in 2018 
 
 run time was about 2 min. on an Intel i7-2600 quad-core PC using Python 2.7 
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     start = time.time()
 
     V_trace, mu_pert_trace, Sp_times = \
-            im.simulate_EIF_pert_numba(tgrid, V_init, params['tau_m'], 
+            im.simulate_EIF_alphapert_numba(tgrid, V_init, params['tau_m'], 
                                        params['V_s'], params['V_r'], params['V_T'],
                                        params['Delta_T'], params['T_ref'],
                                        mu, sigma, pert_times, J_true, tau_true, 

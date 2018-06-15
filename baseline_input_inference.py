@@ -2,10 +2,10 @@
 '''
 example script for estimation of input parameters (mean mu, standard dev. sigma)
 of a leaky or exponential I&F neuron (LIF/EIF) subject to fluctuating inputs 
-using method 1a, cf. Ladenbauer & Ostojic 2018 (Results section 2, Fig 1A)
+using method 1a, cf. Ladenbauer et al. 2018 (Results section 2, Fig 1A)
 -- written by Josef Ladenbauer in 2018 
 
-run time was 14 s on an Intel i7-2600 quad-core PC using Python 2.7 
+run time was <10 s on an Intel i7-2600 quad-core PC using Python 2.7 
 (Anaconda distribution v. 5.0.1) 
 '''
 
@@ -40,8 +40,9 @@ N_spk = 400  # number of spikes used for estimation
 t_limits = [100, 1100] # ms, for plots
 V_init = params['V_r']  # initial condition
 np.random.seed(12)
-
+           
 # parameters for calculation of likelihood (method 1a)
+params['pISI_method'] = 'fourier' 
 f_max = 1000.0 # Hz, determines resolution (accuracy) of ISI density; 1k seems
                # sufficient in many cases, for finer resolution try 2k or 4k
 d_freq = 0.25 # Hz, spacing of frequency grid
@@ -51,10 +52,26 @@ params['V_vals'] = np.arange(params['V_lb'],params['V_s']+d_V/2,d_V)
 params['freq_vals'] = np.arange(0.0, f_max+d_freq/2, d_freq)/1000  # kHz
 params['V_r_idx'] = np.argmin(np.abs(params['V_vals']-params['V_r'])) 
                     # index of reset voltage on grid, this should be a grid point
+                    
+## parameters for calculation of likelihood (method 1b)
+#params['pISI_method'] = 'fvm' 
+#d_V = 0.025  # mV, spacing of voltage grid
+#params['V_lb'] = -150.0  # mV, lower bound
+#params['V_vals'] = np.arange(params['V_lb'],params['V_s']+d_V/2,d_V)
+#params['V_r_idx'] = np.argmin(np.abs(params['V_vals']-params['V_r'])) 
+#                    # index of reset voltage on grid, this should be a grid point
+#params['neuron_model'] = 'LIF'
+#params['integration_method'] = 'implicit'
+#params['N_centers_fvm'] = 1000  # number of centers for voltage discretization
+#params['fvm_v_init'] = 'delta'  # voltage density initialization
+#params['fvm_delta_peak'] = params['V_r']  # location of initial density peak
+#params['fvm_dt'] = 0.1  # ms, time step for finite volume method
+#                        # 0.1 seems ok, prev. def.: 0.05 ms
+ 
 sigma_init = 3.0  # initial sigma value (within reasonable range; initial mu
                   # value will be determined by sigma_init and empirical mean ISI)
 #sigma_init = 1.5 + 4.5*np.random.rand()  # e.g., randomized
-    
+                  
 print('')
 print('baseline spike rate should be > ~4 Hz on average (mean ISI < ~250ms)')
 print('for current numerics parameters')

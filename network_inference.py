@@ -2,10 +2,10 @@
 '''
 example script for estimation of coupling strengths of a (possibly sub-sampled) 
 network of leaky or exponential I&F neurons using method 1a, 
-cf. Ladenbauer & Ostojic 2018 (Results section 4, Fig 3A)
+cf. Ladenbauer et al. 2018 (Results section 4, Fig 4A)
 -- written by Josef Ladenbauer in 2018 
 
-run time was <2.5 min. when using the finite volume method (use_fvm=True) and 
+run time was <2 min. when using the finite volume method (use_fvm=True) and 
              <8 min. when using the Fourier method only (use_fvm=False) 
 on an Intel i7-2600 quad-core PC using Python 2.7 (Anaconda distribution v. 5.0.1) 
 '''
@@ -53,6 +53,7 @@ t_end = 30e4  # ms, simulation duration ("recording time")
 params['dt_sim'] = 0.05  # ms, simulation time step
 
 # parameters for estimation (method 1a)
+params['pISI_method'] = 'fourier'
 f_max = 2000.0 # Hz, determines resolution (accuracy) of ISI density; 
                # 1k seems sufficient in many cases, for finer resolution try 2k or 4k
 d_freq = 0.25 # Hz, spacing of frequency grid
@@ -62,17 +63,24 @@ params['V_vals'] = np.arange(params['V_lb'],params['V_s']+d_V/2,d_V)
 params['freq_vals'] = np.arange(0.0, f_max+d_freq/2, d_freq)/1000  # kHz
 params['V_r_idx'] = np.argmin(np.abs(params['V_vals']-params['V_r'])) 
                     # index of reset voltage on grid, this should be a grid point
-               
-# additional parameters when using the finite volume method instead of the 
-# Fourier method to calculate p_ISI^1, which is optional (but faster)
+                    
+# parameters for estimation when using the finite volume method instead of the 
+# Fourier method to calculate p_ISI^1, which is optional (and often faster)
 use_fvm = True  # False: using Fourier method
-params['neuron_model'] = 'LIF'
-params['integration_method'] = 'implicit'
-params['N_centers_fvm'] = 1000  # number of centers for voltage discretization
-params['fvm_v_init'] = 'delta'  # voltage density initialization
-params['fvm_delta_peak'] = params['V_r']  # location of initial density peak
-params['fvm_dt'] = 0.1  # ms, time step for finite volume method
-                        # 0.1 seems ok, prev. def.: 0.05 ms 
+if use_fvm:
+    params['pISI_method'] = 'fvm' 
+    d_V = 0.025  # mV, spacing of voltage grid
+    params['V_lb'] = -150.0  # mV, lower bound
+    params['V_vals'] = np.arange(params['V_lb'],params['V_s']+d_V/2,d_V)
+    params['V_r_idx'] = np.argmin(np.abs(params['V_vals']-params['V_r'])) 
+                        # index of reset voltage on grid, this should be a grid point
+    params['neuron_model'] = 'LIF'
+    params['integration_method'] = 'implicit'
+    params['N_centers_fvm'] = 1000  # number of centers for voltage discretization
+    params['fvm_v_init'] = 'delta'  # voltage density initialization
+    params['fvm_delta_peak'] = params['V_r']  # location of initial density peak
+    params['fvm_dt'] = 0.1  # ms, time step for finite volume method
+                            # 0.1 seems ok, prev. def.: 0.05 ms 
 
 sigma_init = 3.0  # initial sigma value (initial mu value will be determined by 
                   # sigma_init and empirical mean ISI)
@@ -128,7 +136,7 @@ if __name__ == '__main__':
         result = pool.imap_unordered(im.Jij_estim_wrapper_v1, arg_tuple_list)
     else:
         result = pool.imap_unordered(im.Jij_estim_wrapper_v2, arg_tuple_list)
-#    result = map(im.Jij_estim_wrapper_v1, arg_tuple_list)  # single processing
+    #result = map(im.Jij_estim_wrapper_v1, arg_tuple_list)  # single processing
     # Jij_estim_wrapper estimates all synaptic strengths for a given 
     # post-synaptic neuron (with number iN)
 

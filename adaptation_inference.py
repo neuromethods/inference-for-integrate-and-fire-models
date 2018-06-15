@@ -2,10 +2,10 @@
 '''
 example script for estimation of adaptation parameters of an adaptive leaky or 
 exponential I&F neuron (LIF/EIF) subject to fluctuating inputs, using method 1b, 
-cf. Ladenbauer & Ostojic 2018 (Results section 5, Fig 4B)
+cf. Ladenbauer et al. 2018 (Results section 5, Fig 6B)
 -- written by Josef Ladenbauer in 2018 
 
-run time was <7.5 min. on an Intel i7-2600 quad-core PC using Python 2.7 
+run time was <7 min. on an Intel i7-2600 quad-core PC using Python 2.7 
 (Anaconda distribution v. 5.0.1) 
 '''
 
@@ -56,7 +56,6 @@ params['fvm_v_init'] = 'delta'  # voltage density initialization
 params['fvm_delta_peak'] = params['V_r']  # location of initial density peak
 params['fvm_dt'] = 0.05  # ms, time step for finite volume method
 tau_w_init = 70.0  # initial tau_w value
-Delta_w_init = 0.3  # initial Delta_w value
 Delta_w_vals = np.arange(0.1, 1.5, 0.005)  # Delta_w values to scan for each 
                                            # tau_w value
 mu_pert_vals = np.arange(0.2, 2.51, 0.10)  # mean input perturbation magnitudes
