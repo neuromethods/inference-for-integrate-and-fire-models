@@ -12,7 +12,7 @@ The code contains examples for the estimation of
 __How to use:__ 
 run one of `baseline_input_inference.py`, `input_perturbation_inference.py`, `network_inference.py`, `adaptation_inference.py` with Python 2.x
 
-_Required Python libraries:_ 
+_Required Python libraries_: 
 numpy, scipy, numba, multiprocessing, math, os, collections, tables, time, matplotlib, warnings
 
 These libraries can be conveniently obtained, for example, via a recent [Anaconda distribution](https://www.anaconda.com/download/) (Python 2.x)
