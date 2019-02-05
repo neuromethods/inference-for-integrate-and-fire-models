@@ -9,7 +9,7 @@ The code contains examples for the estimation of
 - synaptic coupling strengths (Results section 4)
 - neuronal adaptation parameters (Results section 5)
 
-__How to use__ 
+__How to use:__ 
 run one of `baseline_input_inference.py`, `input_perturbation_inference.py`, `network_inference.py`, `adaptation_inference.py` with Python 2.x
 
 _Required Python libraries_ 
