@@ -2,11 +2,11 @@
 '''
 example script for estimation of input perturbations of a leaky or exponential 
 I&F neuron (LIF/EIF) subject to fluctuating inputs using method 2, 
-cf. Ladenbauer et al. 2018 (Results section 3, Fig 3A)
--- written by Josef Ladenbauer in 2018 
+cf. Ladenbauer et al. 2019 (Results section 3)
+-- written by Josef Ladenbauer in 2018/2019 
 
-run time was about 2 min. on an Intel i7-2600 quad-core PC using Python 2.7 
-(Anaconda distribution v. 5.0.1) 
+run time was <2.5 min on an Intel i7-2600 quad-core PC using Python 2.7 
+(Anaconda distribution v. 5.3.0) 
 '''
 
 import inference_methods as im
@@ -26,15 +26,15 @@ matplotlib.rc('ytick', labelsize=12)
 params = dict()
 # neuron model parameters:
 params['tau_m'] = 20.0  # ms, membrane time constant
-params['V_r'] = -70.0  # mV, reset voltage
-params['V_s'] = -40.0  # mV, spike voltage
+params['V_r'] = 0.0  # mV, reset voltage
+params['V_s'] = 30.0  # mV, spike voltage
 params['Delta_T'] = 0.0  # mV, threshold slope factor (set 0 for LIF model, 
                          #                                >0 for EIF model)  
-params['V_T'] = -50.0  # mV, effective threshold voltage (only used for EIF)
+params['V_T'] = 15.0  # mV, effective threshold voltage (only used for EIF)
 params['T_ref'] = 0.0  # ms, refractory duration
 
 # input parameters:
-mu = -1.75  # mV/ms, input mean
+mu = 1.75  # mV/ms, input mean
 sigma = 2.5 # mV/sqrt(ms), input standard deviation (noise intensity)
 # mean input perturbations are given by superposed alpha functions triggered at 
 # known times
@@ -43,7 +43,7 @@ J_true = 0.3  # mV/ms, peak value of mean input perturbation mu1(t)
 d_true = 0.0  # ms, delay (estimation of delay not included here)
 
 # note that when estimating the background parameters (mu and sigma) here it is 
-# suggested to use method 1a and then re-estimate mu using method 2 with estimated 
+# suggested to use method 1 and then re-estimate mu using method 2 with estimated 
 # sigma before switching to method 2 for estimating the input perturbations
 
 # parameters for data generation:
@@ -53,11 +53,11 @@ t_end = 1e5  # ms
 t_limits = [5000, 6000]  # ms, for plots
 V_init = params['V_r']  # initial condition    
 np.random.seed(20)
-# perturbation times v.1 (Gaussian distributed inter pert. intervals)
+# perturbation times variant 1 (Gaussian distributed inter pert. intervals)
 IPIs = 200.0 + 50.0*np.random.randn(10000)  
 IPIs = IPIs[IPIs>0]
 pert_times = np.cumsum(IPIs)
-# perturbation times v.2 (Poisson-like with "refractory" duration)
+# perturbation times variant 2 (Poisson-like with "refractory" duration)
 #dp = 10.0  # ms
 #mean_IPI = 90.0  # ms, for actual mean add dp
 #IPIs = np.random.exponential(mean_IPI, 10000) + dp
@@ -70,7 +70,7 @@ f_max = 1000.0 # Hz, frequency spacing for calculation of first order rate respo
 d_freq = 0.25 # Hz, spacing of frequency grid
 d_V = 0.005  # mV, spacing of voltage grid for calculations of steady-state and 
              # first order rate response (note: Vr should be a grid point)
-params['V_lb'] = -150.0  # mV, lower bound
+params['V_lb'] = -80.0  # mV, lower bound
 params['V_vals'] = np.arange(params['V_lb'],params['V_s']+d_V/2,d_V)
 params['freq_vals'] = np.arange(d_freq, f_max+d_freq/2, d_freq)/1000  # kHz
 params['V_r_idx'] = np.argmin(np.abs(params['V_vals']-params['V_r'])) 
@@ -123,9 +123,12 @@ if __name__ == '__main__':
         
         
     # ESTIMATE PARAMETERS from spike train ------------------------------------
-    # pre-calculation of look-up quantities (time constant tau_mu, steady-state
-    # spike rate r_ss) for the LNexp spike rate model derived from I&F neurons 
-    # with white noise input, cf. Methods section 3 
+    # baseline parameters are assumed to be known at this point, otherwise use 
+    # the procedure from baseline_input_inference.py here to estimate mu, sigma 
+    # (and tau_m perhaps), disregarding input perturbations;
+    # next: pre-calculation of look-up quantities (time constant tau_mu, steady-
+    # state spike rate r_ss) for the LNexp spike rate model derived from I&F  
+    # neurons with white noise input, cf. Methods section 3 
     try:
         h5file = tables.open_file(precalc_folder+'/'+precalc_filename, mode='r')
         sigma_vals = np.array(h5file.root.sigma_vals)
@@ -214,8 +217,8 @@ if __name__ == '__main__':
     for i in range(len(Spt_plot)):
         plt.plot([Spt_plot[i], Spt_plot[i]], [params['V_s'], params['V_s']+2.5], 
                  'k', linewidth=2)
-    plt.plot([t_limits[0]-50, t_limits[0]-50], [-80, -60], 'k', linewidth=2)
-    plt.plot([t_limits[0]-50, t_limits[0]+150], [-80, -80], 'k',  linewidth=2)
+    plt.plot([t_limits[0]-50, t_limits[0]-50], [-10, 10], 'k', linewidth=2)
+    plt.plot([t_limits[0]-50, t_limits[0]+150], [-10, -10], 'k',  linewidth=2)
     plt.title('Membrane voltage and observed spike times', fontsize=16)
-    plt.ylim([-82, -35])
+    plt.ylim([-12, 40])
     plt.axis('off')
