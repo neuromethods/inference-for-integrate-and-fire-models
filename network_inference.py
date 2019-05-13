@@ -5,8 +5,8 @@ subsampled) network of leaky or exponential I&F neurons using method 1a,
 cf. Ladenbauer et al. 2019 (Results section 4)
 -- written by Josef Ladenbauer in 2018/2019 
 
-run time was <15 min on an Intel i7-2600 quad-core PC using Python 2.7 
-(Anaconda distribution v. 5.3.0) 
+run time was <15 min on an Intel i7-8550U Laptop using Python 3.7 (Anaconda distrib.
+v. 2019.03; also tested using Python 2.7, Anaconda distrib. v. 5.3.0)
 '''
 
 import inference_methods as im
@@ -15,7 +15,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import time
 import multiprocessing
-matplotlib.rc('text', usetex=True)
+#matplotlib.rc('text', usetex=True)
 matplotlib.rc('xtick', labelsize=12) 
 matplotlib.rc('ytick', labelsize=12) 
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     randnvals = np.random.randn(Nneurons_tot,len(tgrid))
     randnvals_c = np.random.randn(len(tgrid)) # common noise
     print('')
-    print 'starting network simulation ...' 
+    print('starting network simulation ...')
     Spt_dummy, sp_counts, _ = \
         im.simulate_EIF_net_numba(tgrid, V0_vals, params['tau_m'], params['V_s'], 
                                   params['V_r'], params['V_T'], params['Delta_T'], 
@@ -196,7 +196,7 @@ if __name__ == '__main__':
     plt.xticks([-1, 0, 1])
     plt.yticks([-1, 0, 1])
     string = r'$ \varrho ={r}$, '.format(r=round(np.mean(rho_JestJtrue),2)) \
-             + r'MAE$={}$~mV'.format(round(np.mean(mae_JestJtrue),3))
+             + r'MAE$={}$ mV'.format(round(np.mean(mae_JestJtrue),3))
     plt.xlabel('true coupling strengths (mV)', fontsize=12)
     plt.ylabel('estimated coupling \n strengths (mV)', fontsize=12)
     plt.title(string, fontsize=14)
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     binedges = np.arange(0.25,2.251,0.5)
     plt.hist(d_estim_vals, bins=binedges, color='gray')
     plt.xlabel('estimated delays (ms)', fontsize=14)
-    string = 'true delay = {}~ms \n'.format(delay) + r'MAE$={}$~ms'.format(
+    string = 'true delay = {} ms \n'.format(delay) + r'MAE$={}$ ms'.format(
               round(np.mean(mae_destdtrue),3))
     plt.title(string, fontsize=14)
     plt.xlim([-0.5,6.5])
@@ -218,3 +218,5 @@ if __name__ == '__main__':
     ax.spines['top'].set_visible(False) 
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
+
+    plt.show()

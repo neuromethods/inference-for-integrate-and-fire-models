@@ -5,8 +5,8 @@ exponential I&F neuron (LIF/EIF) subject to fluctuating inputs, using method 1a,
 cf. Ladenbauer et al. 2019 (Results section 5)
 -- written by Josef Ladenbauer in 2018/2019
 
-run time was about 5 min on an Intel i7-2600 quad-core PC using Python 2.7 
-(Anaconda distribution v. 5.3.0) 
+run time was <5 min on an Intel i7-8550U Laptop using Python 3.7 (Anaconda distrib.
+v. 2019.03; also tested using Python 2.7, Anaconda distrib. v. 5.3.0)
 '''
 
 import inference_methods as im
@@ -17,7 +17,7 @@ import time
 import scipy.optimize
 import scipy.io
 import scipy.stats
-matplotlib.rc('text', usetex=True)
+#matplotlib.rc('text', usetex=True)
 matplotlib.rc('xtick', labelsize=12) 
 matplotlib.rc('ytick', labelsize=12) 
                                         
@@ -133,7 +133,7 @@ if __name__ == '__main__':
         sol = scipy.optimize.minimize(im.spiketrain_likel_musig_adapt, init_vals, 
                                       args=args_fixed, method='nelder-mead', 
                                       options={'xatol':0.1, 'fatol':0.05})
-        print sol
+        print(sol)
         lastrun = True  # another (last) run to get also Delta_w_estim 
         args_fixed = (mu_estim, sigma_estim, Delta_w_vals, mu_pert_vals, 
                       Spt_obs, lastSpidx, params, ISImin, ISImax, lastrun)
@@ -153,7 +153,7 @@ if __name__ == '__main__':
                                       options={'xatol':0.5, 'fatol':0.1}) 
         # spiketrain_likel_adapt finds optimal Delta_w via brute force for given tau_w
         print('')
-        print sol 
+        print(sol)
         
         tau_w_estim = sol.x
         
@@ -191,3 +191,5 @@ if __name__ == '__main__':
                                                     params['dt_sim'])
     inds = (tgrid_tmp>=t_limits[0]) & (tgrid_tmp<=t_limits[1])
     plt.plot(tgrid_tmp[inds], Delta_w_estim*w_trace_estim[inds], 'g', linewidth=2)
+
+    plt.show()

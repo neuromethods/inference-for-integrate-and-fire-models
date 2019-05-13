@@ -56,7 +56,7 @@ def simulate_EIF_numba(tgrid,V_init,taum,Vth,Vr,VT,DeltaT,Tref,
 
     Sp_times = np.zeros(sp_count)
     if sp_count>0:
-        for i in xrange(sp_count):
+        for i in range(sp_count):
             Sp_times[i] = Sp_times_dummy[i]
 
     return V, Sp_times    
@@ -105,7 +105,7 @@ def simulate_EIF_alphapert_numba(tgrid,V_init,taum,Vth,Vr,VT,DeltaT,Tref,mu,sigm
 
     Sp_times = np.zeros(sp_count)
     if sp_count>0:
-        for i in xrange(sp_count):
+        for i in range(sp_count):
             Sp_times[i] = Sp_times_dummy[i]
 
     return V, J_alpha*s, Sp_times   
@@ -148,7 +148,7 @@ def simulate_EIF_deltapert_numba(tgrid,V_init,taum,Vth,Vr,VT,DeltaT,Tref,mu,sigm
 
     Sp_times = np.zeros(sp_count)
     if sp_count>0:
-        for i in xrange(sp_count):
+        for i in range(sp_count):
             Sp_times[i] = Sp_times_dummy[i]
 
     return V, Sp_times 
@@ -190,7 +190,7 @@ def simulate_EIF_mudyn_deltapert_numba(tgrid,V_init,taum,Vth,Vr,VT,DeltaT,Tref,
 
     Sp_times = np.zeros(sp_count)
     if sp_count>0:
-        for i in xrange(sp_count):
+        for i in range(sp_count):
             Sp_times[i] = Sp_times_dummy[i]
 
     return Sp_times
@@ -228,7 +228,7 @@ def simulate_EIF_adapt_numba(tgrid,V_init,taum,Vth,Vr,VT,DeltaT,Tref,mu,sigma,
 
     Sp_times = np.zeros(sp_count)
     if sp_count>0:
-        for i in xrange(sp_count):
+        for i in range(sp_count):
             Sp_times[i] = Sp_times_dummy[i]
 
     return V, w, Sp_times  
@@ -1138,7 +1138,7 @@ def interpolate_x(xi, rangex):
         idx = -1
         distx = 0.0
     else:
-        for i in xrange(dimx-1):
+        for i in range(dimx-1):
             if rangex[i] <= xi and xi < rangex[i+1]:
                 idx = i
                 distx = (xi-rangex[i])/(rangex[i+1]-rangex[i])
@@ -1492,13 +1492,13 @@ def EIF_steady_state_numba(V_vec, kr, taum, Vr, VT, DeltaT, mu, sigma):
     F_dummy[F_dummy==0.0] = 1.0
     B = (A - 1.0)/F_dummy * sig2term
     sig2term_dV = dV * sig2term
-    for k in xrange(n-1, kr, -1):
+    for k in range(n-1, kr, -1):
         if not F[k]==0.0:
             p_ss[k-1] = p_ss[k] * A[k] + B[k]
         else:
             p_ss[k-1] = p_ss[k] * A[k] + sig2term_dV
         q_ss[k-1] = 1.0    
-    for k in xrange(kr, 0, -1):  
+    for k in range(kr, 0, -1):
         p_ss[k-1] = p_ss[k] * A[k]
         q_ss[k-1] = 0.0
     p_ss_sum = np.sum(p_ss)   
@@ -1528,7 +1528,7 @@ def EIF_lin_rate_response_frange_numba(V_vec, kr, taum, Vr, VT, DeltaT, Tref,
         q1a = 1.0 + 0.0*1j;  p1a = 0.0*1j;  q1b = 0.0*1j;  p1b = 0.0*1j;
         fw = dV*1j*w_vec[iw]
         refterm = np.exp(-1j*w_vec[iw]*Tref)  
-        for k in xrange(n-1, 0, -1):
+        for k in range(n-1, 0, -1):
             if not k==kr+1:
                 q1a_new = q1a + fw*p1a
             else:
@@ -1565,7 +1565,7 @@ def EIF_lin_rate_response_numba(V_vec, kr, taum, Vr, VT, DeltaT, Tref,
     F_dummy[F_dummy==0.0] = 1.0
     B = (A - 1.0)/F_dummy * sig2term
     sig2term_dV = dV * sig2term
-    for k in xrange(n-1, 0, -1):
+    for k in range(n-1, 0, -1):
         if not k==kr+1:
             q1a_new = q1a + fw*p1a
         else:
@@ -1804,11 +1804,11 @@ def get_v_numba(L, Vi, DT, VT, taum, mu, EIF = True):
     # LIF model
     drift = np.empty(L)
     if not EIF:
-        for i in xrange(L):
+        for i in range(L):
             drift[i] = mu - Vi[i] / taum
     # EIF model
     else:
-        for i in xrange(L):
+        for i in range(L):
             drift[i] = ( - Vi[i] + DT * exp((Vi[i] - VT) / DT) ) / taum + mu
     return drift
 
@@ -1822,7 +1822,7 @@ def exp_vdV_D(v,dV,D): # helper function for diags_A
 def matAdt_opt(mat,N,v,D,dV,dt):
     dt_dV = dt/dV
 
-    for i in xrange(1,N-1):
+    for i in range(1,N-1):
         exp_vdV_D1 = exp_vdV_D(v[i],dV,D)
         if exp_vdV_D1 != 1.0: 
             mat[1,i] = -dt_dV*v[i]*exp_vdV_D1/(1.0-exp_vdV_D1) # diagonal
@@ -1933,7 +1933,7 @@ def pISI_fvm_sg(mu, sigma, params, fpt=True, rt=list()):
     Adt *= -1.
     Adt[1,:] += ones_mat
                     
-    for n in xrange(len(mu)):
+    for n in range(len(mu)):
 
         if rc<n_rt and rt[rc]<= n*dt < rt[rc]+dt:
             p = initial_p_distribution(grid, params)
@@ -2016,7 +2016,7 @@ def pISI0pISI1_deltaperts_fvm_sg(mu0, tpert_vec, sigma, params):
           
     p0 = initial_p_distribution(grid, params)
     pertcnt = 0
-    for n in xrange(nt):          
+    for n in range(nt):
         if n*dt < T_ref+dt:
             pISI0[n] = 0
         else:

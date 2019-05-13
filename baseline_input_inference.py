@@ -5,8 +5,8 @@ of a leaky or exponential I&F neuron (LIF/EIF) subject to fluctuating inputs
 using method 1, cf. Ladenbauer et al. 2019 (Results section 2)
 -- written by Josef Ladenbauer in 2018/2019 
 
-run time was <6 s on an Intel i7-2600 quad-core PC using Python 2.7 
-(Anaconda distribution v. 5.3.0) 
+run time was <5 s on an Intel i7-8550U Laptop using Python 3.7 (Anaconda distrib.
+v. 2019.03; also tested using Python 2.7, Anaconda distrib. v. 5.3.0)
 '''
 
 import inference_methods as im
@@ -15,7 +15,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import time
 import scipy.optimize
-matplotlib.rc('text', usetex=True)
+#matplotlib.rc('text', usetex=True)
 matplotlib.rc('xtick', labelsize=12) 
 matplotlib.rc('ytick', labelsize=12) 
                                         
@@ -128,7 +128,7 @@ if __name__ == '__main__':
                                       method='nelder-mead', 
                                       options={'xatol':0.01, 'fatol':0.01})   
         print('')
-        print sol  
+        print(sol)
         print('')    
         mu_estim, sigma_estim = sol.x  
         
@@ -144,7 +144,7 @@ if __name__ == '__main__':
                                       method='nelder-mead', 
                                       options={'xatol':0.01, 'fatol':0.01})
         print('')
-        print sol  
+        print(sol)
         print('')
         mu_estim, sigma_estim, taum_estim = sol.x 
     
@@ -207,3 +207,5 @@ if __name__ == '__main__':
     ax.set_ylim([-12, 40])
     ax.set_xlim([-0.003, 0.05])
     ax.set_axis_off()
+
+    plt.show()
