@@ -15,6 +15,9 @@ __How to use:__
 run one of `baseline_input_inference.py`, `input_perturbation_inference.py`, `network_inference.py`, 
 `adaptation_inference.py` (tested with Python 2.7 and 3.7)
 
+Each script generates output graphs similar to those of the respective 
+results section in the paper, typical run times are indicated in the scripts
+
 _Required Python libraries_: 
 numpy, scipy, numba, multiprocessing, math, os, collections, tables, time, matplotlib, warnings
 
