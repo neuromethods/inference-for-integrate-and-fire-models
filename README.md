@@ -1,7 +1,7 @@
 # inference-for-integrate-and-fire-models
 
-Implementations of the inference methods for integrate-and-fire circuit models described in: 
-__Ladenbauer et al.__ ___Inferring and validating mechanistic models of neural 
+Implementations of the inference methods for integrate-and-fire circuit models described in:  
+__Ladenbauer et al.,__ ___Inferring and validating mechanistic models of neural 
 microcircuits based on spike-train data___  
 [Nature Communications 10:4933 (2019)](https://www.nature.com/articles/s41467-019-12572-0) [[bioRxiv preprint](https://www.biorxiv.org/content/10.1101/261016v4)]
 
